@@ -1,0 +1,127 @@
+x-logging:
+  logging: &logging
+    options:
+      max-size: "10m"
+      max-file: "3"
+x-restart:
+  restart: &restart unless-stopped
+
+services:
+  app:
+    image: zero4636/ruby-on-rails:3.3.4-debian
+    environment:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+    volumes:
+      - ${WORK_DIR}:/app:cached
+      - ./config/start.sh:/app/start.sh:cached
+      - ./config/stop.sh:/app/stop.sh:cached
+      - rbenv_data:/usr/local/rbenv:cached
+      - ~/.ssh:/home/dev/.ssh:delegated
+      - ~/.config/git:/home/dev/.config/git:delegated
+    networks:
+      - app_network
+    stdin_open: true
+    tty: true
+    init: true
+    user: dev
+    hostname: app-${PROJECT_NAME}-docker
+    restart: *restart
+    logging: *logging
+    depends_on:
+      - db
+
+  nginx:
+    image: rogerdz/nginx
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nginx-${PROJECT_NAME}.rule=Host(`${VIRTUAL_HOST}`)
+      - traefik.http.routers.nginx-${PROJECT_NAME}.entrypoints=http,https
+      - traefik.http.routers.nginx-${PROJECT_NAME}.service=nginx-${PROJECT_NAME}
+      - traefik.http.services.nginx-${PROJECT_NAME}.loadbalancer.server.port=80
+      # Redirect all http requests to https
+      - traefik.http.routers.nginx-${PROJECT_NAME}.middlewares=https-redirect@file
+    networks:
+      proxy:
+      app_network:
+    environment:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+      WORK_DIR: ${WORK_DIR}
+      VIRTUAL_HOST: ${VIRTUAL_HOST}
+      SET_REAL_IP_FROM: proxy
+      REAL_IP_HEADER: X-Forwarded-For
+    volumes:
+      - ./config/nginx-sites.conf:/etc/nginx/templates/default.conf.template:ro
+      - ${WORK_DIR}:${WORK_DIR}:cached
+    restart: *restart
+    logging: *logging
+    depends_on:
+      - app
+
+  db:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf
+    ports:
+      - "5432:5432"
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    hostname: db-${PROJECT_NAME}-docker
+    restart: *restart
+    logging: *logging
+    networks:
+      - app_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "8085:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: *restart
+    logging: *logging
+    hostname: pgadmin-${PROJECT_NAME}-docker
+    depends_on:
+      - db
+    networks:
+      - app_network
+
+  redis:
+    image: redis:${REDIS_VERSION}
+    command: redis-server /usr/local/etc/redis/redis.conf --maxmemory ${REDIS_MAX_MEMORY}
+    networks:
+      - app_network
+    volumes:
+      - ./config//redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_data:/data
+    cap_add:
+      - IPC_LOCK
+    restart: *restart
+    logging: *logging
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  rbenv_data:
+  redis_data:
+
+
+networks:
+  app_network:
+    driver: bridge
+  proxy:
+    external: true
