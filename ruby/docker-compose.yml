@@ -20,11 +20,8 @@ services:
       - ~/.ssh:/home/dev/.ssh:delegated
       - ~/.config/git:/home/dev/.config/git:delegated
     networks:
-      app_network:
       proxy:
       internal:
-        aliases:
-          - backend
       mail:
       gateway:
     stdin_open: true
@@ -50,9 +47,7 @@ services:
     networks:
       proxy:
       internal:
-        aliases:
-          - backend
-      app_network:
+      gateway:
     environment:
       UID: ${UID:-1000}
       GID: ${GID:-1000}
@@ -90,7 +85,8 @@ services:
     restart: *restart
     logging: *logging
     networks:
-      - app_network
+      internal:
+
 
   pgadmin:
     image: dpage/pgadmin4
@@ -107,13 +103,14 @@ services:
     depends_on:
       - db
     networks:
-      - app_network
+      internal:
+
 
   redis:
     image: redis:${REDIS_VERSION}
     command: redis-server /usr/local/etc/redis/redis.conf --maxmemory ${REDIS_MAX_MEMORY}
     networks:
-      - app_network
+      internal:
     volumes:
       - ./config//redis.conf:/usr/local/etc/redis/redis.conf:ro
       - redis_data:/data
@@ -130,7 +127,11 @@ volumes:
 
 
 networks:
-  app_network:
+  internal:
     driver: bridge
   proxy:
+    external: true
+  gateway:
+    external: true
+  mail:
     external: true
