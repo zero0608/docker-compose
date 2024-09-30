@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+DIR=$(dirname "$SCRIPT_DIR")
+
+if docker compose version > /dev/null 2>&1; then
+  	DOCKER_COMPOSE="docker compose"
+else
+  	DOCKER_COMPOSE="docker-compose"
+fi
+
+container_ids=$($DOCKER_COMPOSE -f $DIR/docker-compose.yml ps -q)
+
+if [ -z "$container_ids" ]; then
+    echo "No active containers found"
+    exit 1
+fi
+
+docker stats $container_ids

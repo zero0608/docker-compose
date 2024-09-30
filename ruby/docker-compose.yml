@@ -20,12 +20,18 @@ services:
       - ~/.ssh:/home/dev/.ssh:delegated
       - ~/.config/git:/home/dev/.config/git:delegated
     networks:
-      - app_network
+      app_network:
+      proxy:
+      internal:
+        aliases:
+          - backend
+      mail:
+      gateway:
     stdin_open: true
     tty: true
     init: true
     user: dev
-    hostname: app-${PROJECT_NAME}-docker
+    hostname: app-${COMPOSE_PROJECT_NAME}-docker
     restart: *restart
     logging: *logging
     depends_on:
@@ -35,14 +41,17 @@ services:
     image: rogerdz/nginx
     labels:
       - traefik.enable=true
-      - traefik.http.routers.nginx-${PROJECT_NAME}.rule=Host(`${VIRTUAL_HOST}`)
-      - traefik.http.routers.nginx-${PROJECT_NAME}.entrypoints=http,https
-      - traefik.http.routers.nginx-${PROJECT_NAME}.service=nginx-${PROJECT_NAME}
-      - traefik.http.services.nginx-${PROJECT_NAME}.loadbalancer.server.port=80
+      - traefik.http.routers.nginx-${COMPOSE_PROJECT_NAME}.rule=Host(`${VIRTUAL_HOST}`)
+      - traefik.http.routers.nginx-${COMPOSE_PROJECT_NAME}.entrypoints=http,https
+      - traefik.http.routers.nginx-${COMPOSE_PROJECT_NAME}.service=nginx-${COMPOSE_PROJECT_NAME}
+      - traefik.http.services.nginx-${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=80
       # Redirect all http requests to https
-      - traefik.http.routers.nginx-${PROJECT_NAME}.middlewares=https-redirect@file
+      #- traefik.http.routers.nginx-${COMPOSE_PROJECT_NAME}.middlewares=https-redirect@file
     networks:
       proxy:
+      internal:
+        aliases:
+          - backend
       app_network:
     environment:
       UID: ${UID:-1000}
@@ -77,7 +86,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    hostname: db-${PROJECT_NAME}-docker
+    hostname: db-${COMPOSE_PROJECT_NAME}-docker
     restart: *restart
     logging: *logging
     networks:
@@ -94,7 +103,7 @@ services:
       - pgadmin_data:/var/lib/pgadmin
     restart: *restart
     logging: *logging
-    hostname: pgadmin-${PROJECT_NAME}-docker
+    hostname: pgadmin-${PROJECCOMPOSE_PROJECT_NAMET_NAME}-docker
     depends_on:
       - db
     networks:
